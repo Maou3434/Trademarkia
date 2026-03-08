@@ -7,7 +7,7 @@ from typing import List, Tuple
 # Configuration
 DATASET_PATH = "Dataset/20_newsgroups.tar.gz"
 OUTPUT_DIR = "processed_data"
-OUTPUT_FILE = os.path.join(OUTPUT_DIR, "cleaned_newsgroups.csv")
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, "cleaned_newsgroups_v2.csv")
 
 def remove_headers(text: str) -> str:
     """
@@ -59,32 +59,57 @@ def remove_quotes(text: str) -> str:
 
 def remove_noise(text: str) -> str:
     """
-    Remove horizontal rules, repeated punctuation, and other non-semantic artifacts.
+    Remove horizontal rules, repeated punctuation, decorative separators, and ASCII art artifacts.
     """
-    # Remove horizontal rules (lines of -, =, _, *, etc.)
-    text = re.sub(r'^[ \t]*[\-\=\_\*]{4,}[ \t]*$', '', text, flags=re.MULTILINE)
+    # 1. Remove horizontal rules and decorative lines (4+ repetitions of noise chars)
+    # This catches things like ----- , =====, *****, ~~~~~, ^^^^^, etc.
+    text = re.sub(r'^[ \t]*[\-\=\_\*\~\^\#\+\/\\|]{4,}[ \t]*$', '', text, flags=re.MULTILINE)
     
-    # Remove email addresses and URLs (often noise for semantic search)
+    # 2. Catch decorative patterns within lines (e.g., "=-=-=-=-=")
+    text = re.sub(r'([\-\=\_\*\~\^\#\+\/\\|][\-\=\_\*\~\^\#\+\/\\| \t]{1,}){3,}[\-\=\_\*\~\^\#\+\/\\|]', '', text)
+
+    # 3. Remove density-based ASCII art fragments (lines with too many special chars)
+    lines = text.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        if len(line.strip()) > 10:
+            # Count alphanumeric vs special chars
+            alnum_count = sum(1 for c in line if c.isalnum())
+            special_count = len(line.strip()) - alnum_count
+            # If special chars are > 60% of the line, it's likely decorative/ASCII art
+            if special_count / len(line.strip()) > 0.6:
+                continue
+        cleaned_lines.append(line)
+    text = '\n'.join(cleaned_lines)
+    
+    # 4. Remove email addresses and URLs
     text = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '', text)
     text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
+    
+    # 5. Remove "signature virus" and other common bot snippets
+    text = re.sub(r'This is a signature virus.*', '', text, flags=re.IGNORECASE)
     
     return text
 
 def remove_footers(text: str) -> str:
     """
-    Attempt to remove signatures/footers.
+    Attempt to remove signatures/footers more aggressively.
     """
-    # Standard signature delimiter
+    # Standard signature delimiters
     text = re.split(r'\n-- \n', text, 1)[0]
     text = re.split(r'\n--\n', text, 1)[0]
     
-    # Heuristic: Remove typical "Thanks," or "Regards," at the end if followed by a name
+    # Heuristic: Remove typical sign-offs if they are near the end
     lines = text.split('\n')
-    if len(lines) > 3:
-        last_few = lines[-3:]
-        for i, line in enumerate(last_few):
-            if re.match(r'^(Thanks|Regards|Cheers|Sincerely),?$', line.strip(), re.IGNORECASE):
-                return '\n'.join(lines[:- (3-i)])
+    if len(lines) > 5:
+        # Check last 5 lines for common sign-offs
+        for i in range(len(lines)-1, max(-1, len(lines)-6), -1):
+            line = lines[i].strip()
+            if re.match(r'^(Thanks|Regards|Cheers|Sincerely|Best|Later|Peace|Bye),?$', line, re.IGNORECASE):
+                return '\n'.join(lines[:i])
+            # Catch "Name <email>" at the very end
+            if re.match(r'^[A-Z][a-z]+ [A-Z][a-z]+.*<.*>', line):
+                 return '\n'.join(lines[:i])
                 
     return text
 
@@ -92,21 +117,21 @@ def clean_text(text: str) -> str:
     """
     Master cleaning function.
     """
-    # 1. Remove Headers (High noise, metadata)
+    # 1. Remove Headers
     text = remove_headers(text)
     
-    # 2. Remove Quotes (Redundant info for clustering)
+    # 2. Remove Quotes
     text = remove_quotes(text)
     
-    # 3. Remove Noise (Horizontal rules, etc.)
+    # 3. Remove Noise (Horizontal rules, ASCII art, etc.)
     text = remove_noise(text)
     
     # 4. Remove Footers (Signatures)
     text = remove_footers(text)
     
     # 5. Normalization
-    # Replace multiple newlines with single ones for character-based normalization later
-    text = re.sub(r'\n+', ' ', text)
+    # Join lines first to handle cases where noise removal left empty lines
+    text = " ".join([l.strip() for l in text.split('\n') if l.strip()])
     # Remove excessive whitespace
     text = re.sub(r'\s+', ' ', text).strip()
     
