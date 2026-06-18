@@ -22,18 +22,20 @@ This project implements a lightweight semantic search system using the **20 News
 The 20 Newsgroups dataset is inherently noisy. The `cleanup_dataset.py` script performs:
 - **Header Removal**: Strips Usenet headers and metadata.
 - **Quote Stripping**: Intelligently removes email-style quotes, including those with initials (e.g., `AB> `).
-- **Noise Filtering**: Uses regex and character density heuristics to remove horizontal rules, ASCII art, and decorative separators.
-- **Signature Removal**: Detects and removes standard and common non-standard signatures/footers.
-- **Normalization**: Joins lines and collapses excess whitespace for optimal embedding performance.
+- **Noise Filtering**: Uses regex and character density heuristics.
+- **Signature Removal**: Detects and removes standard and common non-standard signatures.
 
-### 2. Fuzzy Clustering (Implementation Ongoing)
-*Note: Clustering implementation details follow the prompt requirements for soft assignments and meaningful semantic boundaries.*
+### 2. Embedding Generation
+Implemented in `scripts/generate_embeddings.py`:
+- **Model**: `BAAI/bge-large-en-v1.5` (1024 dimensions).
+- **Optimizations**: GPU-accelerated inference with batch size 128 and smart truncation for long documents.
+- **Output**: `processed_data/embeddings.npy`.
 
-### 3. Semantic Cache (Implementation Ongoing)
-*Note: Custom first-principles cache avoiding redundant computation on similar queries.*
-
-### 4. FastAPI Service (Implementation Ongoing)
-*Note: Service endpoint exposing search and cache stats.*
+### 3. Vector Store Setup
+Implemented in `scripts/setup_vector_store.py`:
+- **Engine**: `FAISS-GPU` (Facebook AI Similarity Search).
+- **Index Type**: `IndexFlatIP` (Maximum Inner Product) for normalized cosine similarity.
+- **Output**: `processed_data/newsgroups_faiss.index`.
 
 ## Setup and Installation
 
@@ -46,14 +48,21 @@ The 20 Newsgroups dataset is inherently noisy. The `cleanup_dataset.py` script p
 2. **Dependencies**:
    ```bash
    pip install -r requirements.txt
+   # For GPU acceleration (WSL/Linux):
+   pip install sentence-transformers faiss-gpu tqdm
    ```
 
-3. **Data Preparation**:
-   Run the cleanup script to generate the processed dataset:
+3. **Execution Pipeline**:
    ```bash
+   # Step 1: Clean the dataset
    python scripts/cleanup_dataset.py
+
+   # Step 2: Generate embeddings (Requires GPU)
+   python scripts/generate_embeddings.py
+
+   # Step 3: Initialize vector store
+   python scripts/setup_vector_store.py
    ```
-   The cleaned data will be saved to `processed_data/cleaned_newsgroups.csv`.
 
 ## Submission Details
 - **Email Access**: recruitments@trademarkia.com
