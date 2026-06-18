@@ -64,9 +64,7 @@ Implemented in `scripts/setup_vector_store.py`:
    python scripts/setup_vector_store.py
    ```
 
-## Submission Details
-- **Email Access**: recruitments@trademarkia.com
-- **Submission Link**: [Google Form](https://forms.gle/4RpHZpAi8rbG9QCE8)
+
 
 ---
 *Developed as part of the Trademarkia AI&ML Engineer Task.*
